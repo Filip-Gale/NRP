@@ -1,0 +1,241 @@
+import com.opencsv.CSVWriter;
+import org.apache.commons.math3.analysis.function.Gaussian;
+import org.apache.commons.math3.analysis.function.Max;
+import org.encog.Encog;
+import org.encog.engine.network.activation.*;
+import org.encog.mathutil.rbf.GaussianFunction;
+import org.encog.ml.data.MLData;
+import org.encog.ml.data.MLDataPair;
+import org.encog.ml.data.MLDataSet;
+import org.encog.ml.data.basic.BasicMLDataSet;
+import org.encog.neural.networks.BasicNetwork;
+import org.encog.neural.networks.layers.BasicLayer;
+import org.encog.neural.networks.training.propagation.back.Backpropagation;
+import org.encog.neural.networks.training.propagation.manhattan.ManhattanPropagation;
+import org.encog.neural.networks.training.propagation.quick.QuickPropagation;
+import org.encog.neural.networks.training.propagation.resilient.ResilientPropagation;
+import org.encog.util.csv.CSVFormat;
+import org.encog.util.csv.ReadCSV;
+import org.encog.util.normalize.DataNormalization;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
+import java.sql.SQLOutput;
+import java.util.List;
+import java.util.Scanner;
+
+public class HelloWorld {
+
+    public static final int BrJezika = 5;
+    public static final int BrRijeci = 7;
+    public static final int BrojSvojstva=3;
+
+    //Trening set
+    // english(na taj jezik prevadamo rijeci),portugese, spanish,swedish,french
+    public static String[][] DATASET = {
+            {"tomato", "tomate", "tomat", "tomate", "tomate"},
+            {"coffe", "cafe", "cafe","kaffe", "cafe"},
+            {"wine", "vinho", "vino", "vin", "vin"},
+            {"cucumber", "pepino", "pepino", "gurka", "concombre"},
+            {"pasta", "massa", "pastas", "pasta", "pates",},
+            {"yogurt", "yaourt", " iogurte", "yogur", "yoghurt"},
+            {"potato", "batata", "patata", "potatis", "pomme"},
+    };
+
+
+    // english(na taj jezik prevadamo rijeci),portugese,spanish,swedish,french
+    public static String[][] DATASET2 = {
+            {"tomat", "tomati", "toma", "tomatu", "tomatt"},
+            {"cofe", "cave", "caef","kafe", "kafa"},
+            {"wajn", "vino", "vine", "von", "ven"},
+            {"cuumbear", "pepina", "bepino", "gurke", "cuncombre"},
+            {"pastat", "masa", "patas", "fasta", "patese",},
+            {"jogurt", "yaour", " iogurtes", "yogurt", "yoghuor"},
+            {"poato", "babata", "patatat", "potat", "pommes"},
+    };
+
+
+
+    public static double[][] XOR_INPUT = new double[BrJezika*BrRijeci][BrojSvojstva];
+    public static double[][] XOR_INPUT2 = new double[BrJezika*BrRijeci][BrojSvojstva];
+
+
+    public static double[][] XOR_IDEAL = new double[BrJezika*BrRijeci][BrRijeci];
+
+
+
+
+    public static void main(final String[] args) {
+
+        int brojac=0;
+
+        for (double[] a: XOR_IDEAL) {
+            for (double b: a) {
+                b = 0.0;
+            }
+        }
+
+        for (int i = 0; i < DATASET.length; i++) {
+            for (int j = 0; j < BrJezika; j++) {
+                XOR_INPUT[brojac][0]=Normalizacija(Vrijednost(DATASET[i][j],false));
+                XOR_INPUT[brojac][1]=Normalizacija(Vrijednost(DATASET[i][j],true));
+                XOR_INPUT[brojac][2]=VrijednostSlovo(DATASET[i][j],false);
+                //XOR_INPUT[brojac][3]=VrijednostSlovo(DATASET[i][j],true);
+
+
+                XOR_INPUT2[brojac][0]=Normalizacija(Vrijednost(DATASET2[i][j],false));
+                XOR_INPUT2[brojac][1]=Normalizacija(Vrijednost(DATASET2[i][j],true));
+                XOR_INPUT2[brojac][2]=VrijednostSlovo(DATASET2[i][j],false);
+                //XOR_INPUT[brojac][3]=VrijednostSlovo(DATASET[i][j],true);
+
+
+                XOR_IDEAL[brojac][i] = 1.0;
+                //System.out.println("IDEAL:   " + XOR_IDEAL[i][0]);
+                brojac++;
+            }
+        }
+        printArray(XOR_IDEAL);
+
+
+
+        // create a neural network, without using a factory
+        BasicNetwork network = new BasicNetwork();
+        network.addLayer(new BasicLayer(null, false, BrojSvojstva));
+        network.addLayer(new BasicLayer(new ActivationSigmoid(), true, 200));
+        network.addLayer(new BasicLayer(new ActivationSigmoid(), true, 200));
+        network.addLayer(new BasicLayer(new ActivationSigmoid(), true, 200));
+        network.addLayer(new BasicLayer(new ActivationSigmoid(), false, BrRijeci));
+        network.getStructure().finalizeStructure();
+        network.reset();
+
+        // create training data
+        MLDataSet trainingSet = new BasicMLDataSet(XOR_INPUT, XOR_IDEAL);
+        MLDataSet trainingSet2 = new BasicMLDataSet(XOR_INPUT2,XOR_IDEAL);
+
+
+        // train the neural network
+        final ResilientPropagation train = new ResilientPropagation(network,trainingSet);
+        //final Backpropagation train2 = new Backpropagation(network, trainingSet2,0.2,0.3);
+
+        int epoch = 1;
+        do {
+            train.iteration();
+            System.out.println("Epoch #" + epoch + " Error:" + train.getError());
+            epoch++;
+        } while (train.getError() > 0.00001);
+        train.finishTraining();
+
+        printArray(XOR_INPUT);
+
+        printArray(XOR_IDEAL);
+
+
+        // test the neural network
+        System.out.println("Neural Network Training Results:");
+        for (MLDataPair pair : trainingSet) {
+            final MLData output = network.compute(pair.getInput());
+            System.out.println(
+                    "actual result:" +denormaliziraj(output.getData()) +
+                            " ideal result:"+denormaliziraj(pair.getIdeal().getData())
+            );
+
+        }
+        System.out.println("\n \n \n \n");
+        System.out.println("Neural Network Test Results:");
+        for (MLDataPair pair : trainingSet2) {
+            final MLData output = network.compute(pair.getInput());
+            System.out.println(
+                    denormaliziraj(output.getData())
+                            + ", " + denormaliziraj(pair.getIdeal().getData())
+            );
+
+        }
+
+        Encog.getInstance().shutdown();
+
+        System.out.println("\n"+" "+epoch);
+
+        //printArray(XOR_IDEAL);
+
+    }
+
+    private static double Vrijednost(String s,boolean samoglasnici) {
+        //Normalizacija i dodavanje ulaza
+
+        if(samoglasnici){
+            String temp = s.replaceAll("a", "");
+            String temp1 = temp.replaceAll("e", "");
+            String temp2 = temp1.replaceAll("i", "");
+            String temp3 = temp2.replaceAll("o", "");
+            s = temp3.replaceAll("u", "");
+        }
+        double zbroj = 0.0;
+        byte[] bytes = s.getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i < bytes.length; i++) {
+            zbroj = zbroj + (122.0 / bytes[i]);
+        }
+        zbroj /= s.length();
+        return zbroj;
+    }
+
+    public static double VrijednostSlovo(String s,boolean zadnje){
+        char znak;
+        if(zadnje){
+            znak=s.charAt(s.length()-1);
+        }
+        else {
+            znak=s.charAt(0);
+        }
+        double vrijednost=(double)znak;
+        return 1 - ((vrijednost - 97) / (122 - 97));
+    }
+
+
+
+    private static double Normalizacija(double value) {
+        char[] min = new char[1];
+        min[0]='a';
+        char[] max = new char[12];
+        for (int i = 0; i < 12; i++) {
+            max[i] = 'z';
+        }
+        double a = Vrijednost(String.valueOf(min),false);
+        double b = Vrijednost(String.valueOf(max),false);
+        return 1 - ((value - a) / (b - a));
+    }
+
+    public static void printArray(double[][] a) {
+        for (double[] doubles : a) {
+            for (double aDouble : doubles) {
+                System.out.print("{" + aDouble + "},");
+            }
+            System.out.println("\n");
+        }
+    }
+
+
+    private static double average(double[] niz) {
+        double sum = 0;
+        for (double k : niz) {
+            sum += k;
+        }
+        return sum /= niz.length;
+    }
+
+
+    public static String denormaliziraj(double[] trenutna) {
+        double najveca = 0;
+        int indeks = 0;
+        for (int i=0; i< trenutna.length;i++){
+            if(trenutna[i] > najveca){
+                najveca = trenutna[i];
+                indeks = i;
+            }
+        }
+        return DATASET[indeks][0];
+    }
+
+}
